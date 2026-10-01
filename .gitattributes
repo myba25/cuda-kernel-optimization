@@ -1,0 +1,8 @@
+# Normalize line endings in the repository, keep the platform default on checkout.
+* text=auto
+*.ps1 text eol=crlf
+
+# Binary results
+*.png binary
+*.ncu-rep binary
+*.nsys-rep binary
