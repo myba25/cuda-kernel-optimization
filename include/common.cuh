@@ -247,6 +247,23 @@ struct BenchStats {
     int iters = 0;
 };
 
+
+// Evicts L2 by writing a buffer twice the L2 size,
+// so the next kernel reads its data from DRAM.
+inline void flush_l2(cudaStream_t stream = 0) {
+    static void*  buf   = nullptr;
+    static size_t bytes = 0;
+    if (!buf) {
+        int dev = 0, l2 = 0;
+        CUDA_CHECK(cudaGetDevice(&dev));
+        CUDA_CHECK(cudaDeviceGetAttribute(&l2, cudaDevAttrL2CacheSize, dev));
+        bytes = 2 * size_t(l2);              // 2x L2 size for a safety margin
+        CUDA_CHECK(cudaMalloc(&buf, bytes));
+    }
+    CUDA_CHECK(cudaMemsetAsync(buf, 0, bytes, stream));
+}
+
+
 // Times `launch()` with cudaEvents around each run: kernel time only, no host<->device copies.
 // `launch` must enqueue its work on cfg.stream.
 template <typename Launch>
@@ -263,6 +280,7 @@ BenchStats benchmark(Launch&& launch, const BenchConfig& cfg = BenchConfig{}) {
     ms.reserve(cfg.iters);
     for (int i = 0; i < cfg.iters; ++i) {
         if (cfg.reset) cfg.reset();
+        flush_l2(cfg.stream);               // before start, so the memset is not timed
         timer.start(cfg.stream);
         launch();
         timer.stop(cfg.stream);
